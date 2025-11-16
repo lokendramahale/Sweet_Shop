@@ -37,9 +37,6 @@ A comprehensive full-stack web application for managing a sweet shop, built with
 #### Search & Filter
 ![Search](./sweet-shop/screenshots/search.png)
 
-#### Purchase Flow
-![Purchase](.sweet-shop/screenshots/purchase.png)
-
 ### Admin Interface
 
 #### Admin Dashboard
