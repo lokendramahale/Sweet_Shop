@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import sweetRoutes from './routes/sweets';
 import { pool } from './config/database';
+// import { init } from './init';
+import { testConnection } from "./config/database";
 
 dotenv.config();
 
@@ -79,6 +81,12 @@ const PORT = process.env.PORT || 5000;
 
 // Start server only if not in test environment
 if (process.env.NODE_ENV !== 'test') {
+  try {
+    await testConnection();
+    console.log("💾 Database connected successfully!");
+  } catch (err) {
+    console.error("❌ Database connection failed:", err);
+  }
   app.listen(PORT, () => {
     console.log('=================================');
     console.log(`🍭 Sweet Shop API Server`);
