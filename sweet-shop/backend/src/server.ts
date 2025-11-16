@@ -81,20 +81,24 @@ const PORT = process.env.PORT || 5000;
 
 // Start server only if not in test environment
 if (process.env.NODE_ENV !== 'test') {
-  try {
-    await testConnection();
-    console.log("💾 Database connected successfully!");
-  } catch (err) {
-    console.error("❌ Database connection failed:", err);
-  }
-  app.listen(PORT, () => {
-    console.log('=================================');
-    console.log(`🍭 Sweet Shop API Server`);
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 API URL: http://localhost:${PORT}`);
-    console.log('=================================');
-  });
+  (async () => {
+    try {
+      const ok = await testConnection();
+      if (!ok) console.log("❌ Database connection failed");
+      else console.log("💾 Database connected successfully!");
+    } catch (err) {
+      console.error("❌ Database connection failed:", err);
+    }
+
+    app.listen(PORT, () => {
+      console.log('=================================');
+      console.log(`🍭 Sweet Shop API Server`);
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔗 API URL: http://localhost:${PORT}`);
+      console.log('=================================');
+    });
+  })();
 }
 
 // Graceful shutdown
