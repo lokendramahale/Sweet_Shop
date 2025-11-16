@@ -5,9 +5,23 @@ import { pool } from '../src/config/database';
 describe('Sweets API', () => {
   let authToken: string;
   let adminToken: string;
+  let userId: number;
+  let adminId: number;
 
   beforeAll(async () => {
-    // Create test tables
+    // Create tables
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(255) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        is_admin BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sweets (
         id SERIAL PRIMARY KEY,
@@ -16,43 +30,59 @@ describe('Sweets API', () => {
         price DECIMAL(10, 2) NOT NULL,
         quantity INTEGER NOT NULL DEFAULT 0,
         description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        image_url VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT positive_price CHECK (price >= 0),
+        CONSTRAINT positive_quantity CHECK (quantity >= 0)
       )
     `);
 
-    // Register and login users for testing
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        sweet_id INTEGER REFERENCES sweets(id) ON DELETE CASCADE,
+        quantity INTEGER NOT NULL,
+        total_price DECIMAL(10, 2) NOT NULL,
+        purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Register and login regular user
     const userRes = await request(app)
       .post('/api/auth/register')
       .send({ username: 'user', email: 'user@test.com', password: 'Pass123!' });
-    
+    userId = userRes.body.userId;
+
     const loginRes = await request(app)
       .post('/api/auth/login')
       .send({ email: 'user@test.com', password: 'Pass123!' });
-    
     authToken = loginRes.body.token;
 
-    // Create admin user
+    // Register admin user
     const adminRes = await request(app)
       .post('/api/auth/register')
       .send({ username: 'admin', email: 'admin@test.com', password: 'Admin123!' });
-    
-    // Manually set admin role (in real app, this would be done differently)
-    await pool.query('UPDATE users SET is_admin = TRUE WHERE email = $1', ['admin@test.com']);
-    
+    adminId = adminRes.body.userId;
+
+    await pool.query('UPDATE users SET is_admin = TRUE WHERE id = $1', [adminId]);
+
     const adminLoginRes = await request(app)
       .post('/api/auth/login')
       .send({ email: 'admin@test.com', password: 'Admin123!' });
-    
     adminToken = adminLoginRes.body.token;
   });
 
   afterAll(async () => {
-    await pool.query('DROP TABLE IF EXISTS sweets');
-    await pool.query('DROP TABLE IF EXISTS users');
+    await pool.query('DROP TABLE IF EXISTS purchases CASCADE');
+    await pool.query('DROP TABLE IF EXISTS sweets CASCADE');
+    await pool.query('DROP TABLE IF EXISTS users CASCADE');
     await pool.end();
   });
 
   beforeEach(async () => {
+    await pool.query('DELETE FROM purchases');
     await pool.query('DELETE FROM sweets');
   });
 
@@ -74,27 +104,39 @@ describe('Sweets API', () => {
 
       expect(response.body).toHaveProperty('id');
       expect(response.body.name).toBe(sweetData.name);
-      expect(response.body.price).toBe(sweetData.price);
+      expect(parseFloat(response.body.price)).toBe(sweetData.price);
     });
 
     it('should reject creation without authentication', async () => {
-      const sweetData = {
-        name: 'Gummy Bears',
-        category: 'Gummies',
-        price: 1.99,
-        quantity: 50
-      };
-
       await request(app)
         .post('/api/sweets')
-        .send(sweetData)
+        .send({ name: 'Test', category: 'Test', price: 1, quantity: 10 })
         .expect(401);
+    });
+
+    it('should validate required fields', async () => {
+      const response = await request(app)
+        .post('/api/sweets')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Test' })
+        .expect(400);
+
+      expect(response.body).toHaveProperty('error');
+    });
+
+    it('should reject negative price', async () => {
+      const response = await request(app)
+        .post('/api/sweets')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Test', category: 'Test', price: -1, quantity: 10 })
+        .expect(400);
+
+      expect(response.body.error).toContain('negative');
     });
   });
 
   describe('GET /api/sweets', () => {
     beforeEach(async () => {
-      // Insert test data
       await pool.query(`
         INSERT INTO sweets (name, category, price, quantity)
         VALUES 
@@ -112,6 +154,12 @@ describe('Sweets API', () => {
       expect(response.body).toHaveLength(2);
       expect(response.body[0]).toHaveProperty('name');
       expect(response.body[0]).toHaveProperty('category');
+    });
+
+    it('should require authentication', async () => {
+      await request(app)
+        .get('/api/sweets')
+        .expect(401);
     });
   });
 
@@ -172,10 +220,7 @@ describe('Sweets API', () => {
     });
 
     it('should update a sweet', async () => {
-      const updateData = {
-        name: 'Updated Sweet',
-        price: 2.00
-      };
+      const updateData = { name: 'Updated Sweet', price: 2.00 };
 
       const response = await request(app)
         .put(`/api/sweets/${sweetId}`)
@@ -184,7 +229,7 @@ describe('Sweets API', () => {
         .expect(200);
 
       expect(response.body.name).toBe(updateData.name);
-      expect(response.body.price).toBe(updateData.price);
+      expect(parseFloat(response.body.price)).toBe(updateData.price);
     });
 
     it('should return 404 for non-existent sweet', async () => {
@@ -208,13 +253,12 @@ describe('Sweets API', () => {
       sweetId = result.rows[0].id;
     });
 
-    it('should allow admin to delete a sweet', async () => {
+    it('should allow admin to delete', async () => {
       await request(app)
         .delete(`/api/sweets/${sweetId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      // Verify it's deleted
       const result = await pool.query('SELECT * FROM sweets WHERE id = $1', [sweetId]);
       expect(result.rows).toHaveLength(0);
     });
@@ -239,14 +283,14 @@ describe('Sweets API', () => {
       sweetId = result.rows[0].id;
     });
 
-    it('should purchase a sweet and decrease quantity', async () => {
+    it('should purchase sweet and decrease quantity', async () => {
       const response = await request(app)
         .post(`/api/sweets/${sweetId}/purchase`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({ quantity: 3 })
         .expect(200);
 
-      expect(response.body.quantity).toBe(7);
+      expect(response.body.sweet.quantity).toBe(7);
     });
 
     it('should prevent purchase when out of stock', async () => {
@@ -254,6 +298,14 @@ describe('Sweets API', () => {
         .post(`/api/sweets/${sweetId}/purchase`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({ quantity: 15 })
+        .expect(400);
+    });
+
+    it('should validate purchase quantity', async () => {
+      await request(app)
+        .post(`/api/sweets/${sweetId}/purchase`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ quantity: -1 })
         .expect(400);
     });
   });
@@ -277,7 +329,7 @@ describe('Sweets API', () => {
         .send({ quantity: 50 })
         .expect(200);
 
-      expect(response.body.quantity).toBe(55);
+      expect(response.body.sweet.quantity).toBe(55);
     });
 
     it('should prevent non-admin from restocking', async () => {
