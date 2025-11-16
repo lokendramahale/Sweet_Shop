@@ -26,33 +26,33 @@ A comprehensive full-stack web application for managing a sweet shop, built with
 ### User Interface
 
 #### Login Page
-![Login Page](./screenshots/login.png)
+![Login Page](.sweet-shop/screenshots/login.png)
 
 #### Registration Page
-![Registration Page](./screenshots/register.png)
+![Registration Page](.sweet-shop/screenshots/register.png)
 
 #### Dashboard - Customer View
-![Dashboard](./screenshots/dashboard.png)
+![Dashboard](.sweet-shop/screenshots/dashboard.png)
 
 #### Search & Filter
-![Search](./screenshots/search.png)
+![Search](.sweet-shop/screenshots/search.png)
 
 #### Purchase Flow
-![Purchase](./screenshots/purchase.png)
+![Purchase](.sweet-shop/screenshots/purchase.png)
 
 ### Admin Interface
 
 #### Admin Dashboard
-![Admin Dashboard](./screenshots/admin-dashboard.png)
+![Admin Dashboard](.sweet-shop/screenshots/admin-dashboard.png)
 
 #### Add New Sweet
-![Add Sweet](./screenshots/add-sweet.png)
+![Add Sweet](.sweet-shop/screenshots/add-sweet.png)
 
 #### Edit Sweet
-![Edit Sweet](./screenshots/edit-sweet.png)
+![Edit Sweet](.sweet-shop/screenshots/edit-sweet.png)
 
 #### Restock Functionality
-![Restock](./screenshots/restock.png)
+![Restock](.sweet-shop/screenshots/restock.png)
 
 ---
 
